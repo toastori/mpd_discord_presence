@@ -1,0 +1,7 @@
+.{
+    .mpd_addr = "localhost:6600",
+    // .client_id = // u64,
+    .details = "[[%discnumber%.]%tracknumber%. ]%title%",
+    .state = "[%artist%][ - %album%]",
+    .discord_display_type = .name, // .name, .details or .state
+}

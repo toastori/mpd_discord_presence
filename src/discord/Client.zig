@@ -23,7 +23,7 @@ msg_queue: Io.Queue(MsgQueueItem),
 sender_work: ?Io.Future(Writer.Error!void),
 
 /// Initialize Client members and connection
-pub fn init(ally: Allocator, io: Io, client_id: u64) Allocator.Error!Client {
+pub fn init(ally: Allocator, io: Io, client_id: u64) ConnectError!Client {
     return .{
         .conn = try connect_rpc(ally, io),
         .client_id = client_id,
@@ -33,12 +33,13 @@ pub fn init(ally: Allocator, io: Io, client_id: u64) Allocator.Error!Client {
     };
 }
 
-pub const StartError = error{HandshakeFailed};
+pub const StartError =
+    error{ HandshakeFailed } ||
+    Io.ConcurrentError;
 pub fn start(self: *Client, io: Io) StartError!void {
     self.handshake(io) catch return StartError.HandshakeFailed;
 
-    self.sender_work = io.concurrent(sender, .{ io, self.conn, &self.msg_queue }) catch
-        @panic("Unable to run concurrent work");
+    self.sender_work = try io.concurrent(sender, .{ io, self.conn, &self.msg_queue });
 }
 
 pub fn deinit(self: *Client, io: Io) void {
@@ -68,8 +69,10 @@ pub fn clearActivity(self: *Client, io: Io) void {
     self.msg_queue.putOne(io, .{ .msg = msg, .len = @intCast(slice.len + 8) }) catch {};
 }
 
+pub const ConnectError =
+    error { FileNotFound } || Allocator.Error;
 /// Find the file descriptor and connect
-fn connect_rpc(ally: Allocator, io: Io) Allocator.Error!Socket {
+fn connect_rpc(ally: Allocator, io: Io) ConnectError!Socket {
     if (builtin.os.tag == .windows) Socket.openAbsolute(
         \\\\.\pipe\
     ); // TODO
@@ -95,7 +98,7 @@ fn connect_rpc(ally: Allocator, io: Io) Allocator.Error!Socket {
         ) catch unreachable;
         return ua.connect(io) catch continue;
     }
-    @panic("no valid discord ipc pipe found");
+    return ConnectError.FileNotFound;
 }
 
 /// Handshake with discord ipc (right after connection)

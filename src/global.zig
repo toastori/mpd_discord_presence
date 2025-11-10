@@ -58,7 +58,7 @@ pub fn songinfo_unlock(io: Io) void {
     songinfo_mutex.unlock(io);
 }
 
-pub fn updateSongInfo(ally: Allocator, line: []const u8) !void {
+pub fn updateSongInfo(ally: Allocator, line: []const u8) Allocator.Error!void {
     const colon = std.mem.findScalarPos(u8, line, 0, ':') orelse
         @panic("unexpected colon not found finding SongInfo key\n");
 

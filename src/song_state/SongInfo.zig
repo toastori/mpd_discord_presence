@@ -107,7 +107,7 @@ pub fn metadataIsNull(self: @This(), metadata: Metadata) bool {
     };
 }
 
-pub fn assign(self: *@This(), ally: Allocator, str_buf: *std.ArrayList(u8), key: []const u8, value: []const u8) !void {
+pub fn assign(self: *@This(), ally: Allocator, str_buf: *std.ArrayList(u8), key: []const u8, value: []const u8) Allocator.Error!void {
     const Keys = enum {
         Artist,
         AlbumArtist,
