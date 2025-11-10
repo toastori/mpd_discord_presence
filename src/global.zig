@@ -2,8 +2,8 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const Io = std.Io;
 
-const SongInfo = @import("SongInfo.zig");
-const PlayInfo = @import("PlayInfo.zig");
+const SongInfo = @import("song_state/SongInfo.zig");
+const PlayInfo = @import("song_state/PlayInfo.zig");
 
 
 pub var playinfo: PlayInfo = undefined;

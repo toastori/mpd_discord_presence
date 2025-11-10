@@ -6,8 +6,8 @@ const Io = std.Io;
 const global = @import("global.zig");
 const discord = @import("discord.zig");
 
-const fmtstr = @import("fmtstr.zig");
-const SongInfo = @import("SongInfo.zig");
+const Formatter = @import("formatter/Formatter.zig");
+const SongInfo = @import("song_state/SongInfo.zig");
 
 pub fn main() !void {
     var debug_ally = if (builtin.mode == .Debug) std.heap.DebugAllocator(.{}).init else void{};
@@ -147,11 +147,11 @@ fn rpc(ally: Allocator, io: Io, queue: *Io.Queue(bool)) !void {
     var stderr_buf: [512]u8 = undefined;
     var stderr = std.fs.File.stderr().writer(&stderr_buf);
 
-    var first_line: fmtstr.Fmt = try .init(ally, "[[%discnumber%.]%tracknumber%. ]%title%", &global.songinfo, &stderr.interface);
+    var first_line: Formatter = try .init(ally, "[[%discnumber%.]%tracknumber%. ]%title%", &global.songinfo, &stderr.interface);
     defer first_line.deinit(ally);
-    var second_line: fmtstr.Fmt = try .init(ally, "[%artist%][ - %album%]", &global.songinfo, &stderr.interface);
+    var second_line: Formatter = try .init(ally, "[%artist%][ - %album%]", &global.songinfo, &stderr.interface);
     defer second_line.deinit(ally);
-    // flush fmt parse errors
+    // flush formatter parse errors
     try stderr.interface.flush();
 
     var firstline_buf: [512]u8 = undefined;
@@ -194,6 +194,6 @@ fn rpc(ally: Allocator, io: Io, queue: *Io.Queue(bool)) !void {
 }
 
 test {
-    _ = @import("fmtstr.zig");
-    _ = @import("fmtstr_parser.zig");
+    _ = @import("formatter/Formatter.zig");
+    _ = @import("formatter/parser.zig");
 }

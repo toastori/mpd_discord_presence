@@ -2,9 +2,9 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const Writer = std.Io.Writer;
 
-const fmtstr = @import("fmtstr.zig");
-const Node = fmtstr.Node;
-const Metadata = @import("SongInfo.zig").Metadata;
+const Formatter = @import("Formatter.zig");
+const Node = Formatter.Node;
+const Metadata = @import("../song_state/SongInfo.zig").Metadata;
 
 pub const Tag = enum {
     l_bracket,
