@@ -89,7 +89,7 @@ pub fn reader(client: *Client, io: Io) Reader.Error!void {
     while (true) {
         _ = try r.takeInt(u32, .little); // opcode
         const msg_len = try r.takeInt(u32, .little);
-        r.toss(msg_len);
+        try r.discardAll(msg_len);
     }
 }
 
