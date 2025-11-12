@@ -1,0 +1,11 @@
+[Unit]
+Description=Discord Rich Presence Client for MPD
+Documentation=https://github.com/toastori/mpd-discord-presence
+After=mpd.service
+Wants=mpd.service
+
+[Service]
+Type=simple
+Restart=on-failure
+RestartSec=10
+ExecStart=/usr/bin/mpd-discord-presence

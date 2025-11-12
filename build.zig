@@ -13,7 +13,7 @@ pub fn build(b: *std.Build) void {
     });
 
     const exe = b.addExecutable(.{
-        .name = "mpd_discord_presence",
+        .name = "mpd-discord-presence",
         .root_module = exe_mod,
     });
 

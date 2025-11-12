@@ -51,7 +51,7 @@ pub fn get() Config {
 }
 
 fn readConfigFile(ally: Allocator, io: Io, file_buf: []u8) ![]const u8 {
-    const app_name = "mpd_discord_presence";
+    const app_name = "mpd-discord-presence";
     const config_name = "config.zon";
     const default_conf: []const u8 = @embedFile("default_config.zon");
 
