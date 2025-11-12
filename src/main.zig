@@ -6,7 +6,10 @@ const Io = std.Io;
 const global = @import("global.zig");
 const config = @import("config.zig");
 
+const discord = @import("discord.zig");
+
 const mpd_main = @import("works/mpd.zig").main;
+const msg_queue_main = @import("works/msg_queue.zig").main;
 const rpc_main = @import("works/rpc.zig").main;
 
 pub fn main() !void {
@@ -29,25 +32,45 @@ pub fn main() !void {
     defer config.deinit(ally);
 
     try juicy_main(ally, io);
+    std.log.info("exit peacefully", .{});
 }
 
-fn juicy_main(ally: Allocator, io: Io) !void {
-    var queue: Io.Queue(bool) = .init(&.{});
-    stop(io, &queue);
+fn juicy_main(ally: Allocator, io: Io) Io.ConcurrentError!void {
+    var signal_queue: Io.Queue(bool) = .init(&.{});
+    var msg_queue: Io.Queue(discord.MsgQueueItem) = .init(&.{});
 
-    var mpd_work = try io.concurrent(mpd_main, .{ ally, io, &queue });
+    stop(io, &signal_queue);
+
+    var client: discord.Client = .new(config.get().client_id);
+
+    var mpd_work = try io.concurrent(mpd_main, .{ ally, io, &signal_queue });
     defer mpd_work.cancel(io) catch {};
-    var rpc_work = try io.concurrent(rpc_main, .{ ally, io, &queue });
-    defer rpc_work.cancel(io) catch {};
+    var msg_queue_work = try io.concurrent(msg_queue_main, .{ ally, io, &client, &signal_queue, &msg_queue });
+    defer msg_queue_work.cancel(io) catch {};
 
-    switch (io.select(.{
-        .mpd = &mpd_work,
-        .rpc = &rpc_work,
-    }) catch unreachable) {
-        .mpd => |ret| ret catch |err| std.log.err("mpd exits with {t}", .{err}),
-        .rpc => |ret| ret catch |err| std.log.err("rpc exits with {t}", .{err}),
+    while (true) {
+        // The only one spawn to works from one connection, so handle it here
+        var rpc_works = rpc_main(ally, io, &client, &msg_queue) catch |err| switch (err) {
+            Io.ConcurrentError.ConcurrencyUnavailable => |e| return e,
+            else => |e| return std.log.err("mpd exits with error {t}", .{e}),
+        };
+        defer client.end(io); // defer .end here because client .start in rpc_main
+        defer rpc_works.sender.cancel(io) catch {};
+        defer rpc_works.reader.cancel(io) catch {};
+
+        switch (io.select(.{
+            .rpc_sender = &rpc_works.sender,
+            .rpc_reader = &rpc_works.reader,
+            .mpd = &mpd_work,
+            .msg_queue = &msg_queue_work,
+        }) catch unreachable) {
+            .rpc_sender => |ret| ret catch continue, // the reason to handle them here is they fail softly
+            .rpc_reader => |ret| ret catch continue, // the reason to handle them here is they fail softly
+            // Following 2 fail hardly
+            .mpd => |ret| return ret catch |err| std.log.err("mpd exits with error {t}", .{err}),
+            .msg_queue => |ret| return ret catch |err| std.log.err("msg_queue exits with error {t}", .{err}),
+        }
     }
-    std.log.info("exit peacefully", .{});
 }
 
 /// Handles Terminate Signal

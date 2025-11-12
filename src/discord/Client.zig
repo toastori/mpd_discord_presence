@@ -18,7 +18,7 @@ pid: std.posix.pid_t,
 /// Discord Application ID
 client_id: u64,
 /// buffer for msg
-last_msg: MsgQueueItem = undefined,
+last_msg: MsgQueueItem = .{ .msg = undefined, .len = 0 },
 
 /// Initialize Client members and connection
 pub fn new(client_id: u64) Client {
@@ -65,6 +65,8 @@ pub fn clearActivity(self: Client, io: Io, msg_queue: *Io.Queue(MsgQueueItem)) v
 /// Message sending loop on receiving msg from queue
 pub fn sender(client: *Client, io: Io, msg_queue: *Io.Queue(MsgQueueItem)) Writer.Error!void {
     std.debug.assert(client.conn != null);
+    errdefer std.log.info("discord rpc disconnected", .{});
+
     var w_buf: [1024]u8 = undefined;
     var conn_writer = client.conn.?.writer(io, &w_buf);
     const w = &conn_writer.interface;
@@ -82,6 +84,8 @@ pub fn sender(client: *Client, io: Io, msg_queue: *Io.Queue(MsgQueueItem)) Write
 
 pub fn reader(client: *Client, io: Io) Reader.Error!void {
     std.debug.assert(client.conn != null);
+    errdefer std.log.info("discord rpc disconnected", .{});
+
     var r_buf: [1024]u8 = undefined;
     var conn_reader = client.conn.?.reader(io, &r_buf);
     const r = &conn_reader.interface;
