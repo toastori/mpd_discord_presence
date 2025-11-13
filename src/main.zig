@@ -12,7 +12,10 @@ const mpd_main = @import("works/mpd.zig").main;
 const msg_queue_main = @import("works/msg_queue.zig").main;
 const rpc_main = @import("works/rpc.zig").main;
 
+const albumart_deinit = @import("works/albumart.zig").deinit;
+
 pub fn main() void {
+    // Allocator
     var debug_ally = if (builtin.mode == .Debug) std.heap.DebugAllocator(.{}).init else void{};
     defer if (@TypeOf(debug_ally) == std.heap.DebugAllocator(.{}))
         if (debug_ally.deinit() == .leak) std.debug.print("debug allocator: {d} leaks found\n", .{debug_ally.detectLeaks()});
@@ -21,24 +24,30 @@ pub fn main() void {
     var threadsafe_ally = std.heap.ThreadSafeAllocator{ .child_allocator = base_ally };
     const ally = threadsafe_ally.allocator();
 
+    // Io
     var threaded = std.Io.Threaded.init(ally);
     defer threaded.deinit();
     const io = threaded.io();
 
+    // Global
     defer global.deinit(ally, io);
 
+    // Config
     config.init(ally, io) catch
         std.log.warn("unable to read/get config file, default is used instead.", .{});
     defer config.deinit(ally);
 
-    juicy_main(ally, io) catch {
-        std.log.err("failed to spawn thread, lets wait for zig evented io :)", .{});
-        return;
+    // Actual code start here
+    juicy_main(ally, io) catch |err| {
+        if (err == JuicyError.ConcurrencyUnavailable)
+            std.log.err("failed to spawn thread, lets wait for zig evented io :)", .{});
+        std.process.exit(1);
     };
     std.log.info("exit peacefully", .{});
 }
 
-fn juicy_main(ally: Allocator, io: Io) Io.ConcurrentError!void {
+const JuicyError = error{OtherError} || Io.ConcurrentError;
+fn juicy_main(ally: Allocator, io: Io) JuicyError!void {
     var signal_queue: Io.Queue(bool) = .init(&.{});
     var msg_queue: Io.Queue(discord.MsgQueueItem) = .init(&.{});
 
@@ -55,7 +64,10 @@ fn juicy_main(ally: Allocator, io: Io) Io.ConcurrentError!void {
         // The only one spawn to works from one connection, so handle it here
         var rpc_works = rpc_main(ally, io, &client, &msg_queue) catch |err| switch (err) {
             Io.ConcurrentError.ConcurrencyUnavailable => |e| return e,
-            else => |e| return std.log.err("mpd exits with error {t}", .{e}),
+            else => |e| {
+                std.log.err("mpd exits with error {t}", .{e});
+                return JuicyError.OtherError;
+            },
         };
         defer client.end(io); // defer .end here because client .start in rpc_main
         defer rpc_works.sender.cancel(io) catch {};
@@ -70,8 +82,14 @@ fn juicy_main(ally: Allocator, io: Io) Io.ConcurrentError!void {
             .rpc_sender => |ret| ret catch continue, // the reason to handle them here is they fail softly
             .rpc_reader => |ret| ret catch continue, // the reason to handle them here is they fail softly
             // Following 2 fail hardly
-            .mpd => |ret| return ret catch |err| std.log.err("mpd exits with error {t}", .{err}),
-            .msg_queue => |ret| return ret catch |err| std.log.err("msg_queue exits with error {t}", .{err}),
+            .mpd => |ret| return ret catch |err| {
+                std.log.err("mpd exits with error {t}", .{err});
+                return JuicyError.OtherError;
+            },
+            .msg_queue => |ret| return ret catch |err| {
+                std.log.err("msg_queue exits with error {t}", .{err});
+                return JuicyError.OtherError;
+            },
         }
     }
 }
