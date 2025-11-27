@@ -42,12 +42,12 @@ pub fn search(ally: Allocator, io: Io, signal_queue: *Io.Queue(bool)) void {
             .response_writer = &aw.?.writer,
             .location = .{ .uri = std.Uri.parse(bufPrint(
                 &uri_buf,
-                mbz_rg ++ "query={f}{f}{f}{f}&limit=1&fmt=json",
+                mbz_rg ++ "query={f}{f}{f}{c}&limit=1&fmt=json",
                 .{
-                    PercentEncoder{ .str = "release:" },
                     PercentEncoder{ .str = global.songinfo.album },
-                    PercentEncoder{ .str = " AND artist:" },
+                    PercentEncoder{ .str = " artist:\"" },
                     PercentEncoder{ .str = global.songinfo.artist() },
+                    '"',
                 },
             ) catch return) catch return },
         }) catch return;
