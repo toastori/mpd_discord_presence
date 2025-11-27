@@ -9,28 +9,23 @@ const mbz_rg = "https://musicbrainz.org/ws/2/release-group/?";
 const caa_rg = "https://coverartarchive.org/release-group/";
 
 var client: ?std.http.Client = null;
-var aw: ?Io.Writer.Allocating = null;
+var uri_buf: [1024]u8 = undefined;
+var buffer: [1024]u8 = undefined;
 
 pub fn deinit() void {
     if (client != null) client.?.deinit();
-    if (aw != null) aw.?.deinit();
 }
 
 pub fn search(ally: Allocator, io: Io, signal_queue: *Io.Queue(bool)) void {
-    var uri_buf: [1024]u8 = undefined;
-
-    var arena_ally: std.heap.ArenaAllocator = .init(ally);
-    defer arena_ally.deinit();
-    const arena = arena_ally.allocator();
-
+    // Init http client if haven't
     if (client == null) client = .{ .allocator = ally, .io = io };
-    if (aw == null) aw = .init(ally);
-    std.debug.assert(client != null and aw != null);
+    std.debug.assert(client != null);
 
     // Simply avoid musicbrainz rate limit
     io.sleep(.fromSeconds(1), .boot) catch return;
 
-    aw.?.clearRetainingCapacity();
+    var writer: FillingWriter = .init(&buffer);
+
     const id_fetch = blk: {
         global.songinfo_lock(io) catch return;
         defer global.songinfo_unlock(io);
@@ -39,27 +34,26 @@ pub fn search(ally: Allocator, io: Io, signal_queue: *Io.Queue(bool)) void {
 
         break :blk client.?.fetch(.{
             .method = .GET,
-            .response_writer = &aw.?.writer,
+            .response_writer = &writer.interface,
             .location = .{ .uri = std.Uri.parse(bufPrint(
                 &uri_buf,
-                mbz_rg ++ "query={f}{f}{f}{c}&limit=1&fmt=json",
+                mbz_rg ++ "query={f}+ARTIST%3A\"{f}\"&limit=1&fmt=json",
                 .{
                     PercentEncoder{ .str = global.songinfo.album },
-                    PercentEncoder{ .str = " artist:\"" },
                     PercentEncoder{ .str = global.songinfo.artist() },
-                    '"',
                 },
             ) catch return) catch return },
         }) catch return;
     };
     if (id_fetch.status.class() != .success) return;
 
-    const parsed: MbzResult =
-        std.json.parseFromSliceLeaky(MbzResult, arena, aw.?.written(), .{ .ignore_unknown_fields = true }) catch return;
-    if (parsed.@"release-groups".len == 0) return;
-
-    global.addMusicBrainzReleaseGroup(ally, io, parsed.@"release-groups"[0].id) catch return;
-    signal_queue.putOne(io, true) catch return;
+    const res = writer.written();
+    if (std.mem.findPosLinear(u8, res, 0, "\"id\":")) |idx| {
+        // hardcoded release-id position after "id":
+        // "id":" is len 6, while uuid is 32 + 4 (32 digits + 4 dashes '-')
+        global.addMusicBrainzReleaseGroup(ally, io, res[idx + 6..idx + 6 + 32 + 4]) catch return;
+        signal_queue.putOne(io, true) catch return;
+    }
 }
 
 const PercentEncoder = struct {
@@ -94,5 +88,55 @@ const MbzResult = struct {
             ally.free(rg.id);
         }
         ally.free(self.@"release-group");
+    }
+};
+
+const FillingWriter = struct {
+    buffer: []u8,
+    end: usize = 0,
+    interface: Io.Writer = .{
+        .buffer = &.{},
+        .vtable = &.{
+            .drain = drain,
+        },
+    },
+
+    pub fn init(buf: []u8) FillingWriter {
+        return .{ .buffer = buf };
+    }
+
+    pub fn written(self: FillingWriter) []const u8 {
+        return self.buffer[0..self.end];
+    }
+
+    fn drain(w: *Io.Writer, data: []const []const u8, splat: usize) Io.Writer.Error!usize {
+        const filling: *FillingWriter = @alignCast(@fieldParentPtr("interface", w));
+        if (filling.end == filling.buffer.len) return 0;
+
+        const initial_end = filling.end;
+        // w.buffer.len is always 0, so dont care
+        // data
+        for (data[0 .. data.len - 1]) |line| {
+            if (filling.buffer.len - filling.end >= line.len) {
+                @memcpy(filling.buffer[filling.end .. filling.end + line.len], line);
+                filling.end += line.len;
+            } else {
+                @memcpy(filling.buffer[filling.end..], line[0 .. filling.buffer.len - filling.end]);
+                filling.end = filling.buffer.len;
+            }
+        }
+        // splat
+        const line = data[data.len - 1];
+        for (0..splat) |_| {
+            if (filling.buffer.len - filling.end >= line.len) {
+                @memcpy(filling.buffer[filling.end .. filling.end + line.len], line);
+                filling.end += line.len;
+            } else {
+                @memcpy(filling.buffer[filling.end..], line[0 .. filling.buffer.len - filling.end]);
+                filling.end = filling.buffer.len;
+            }
+        }
+
+        return filling.end - initial_end;
     }
 };
