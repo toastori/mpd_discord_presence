@@ -27,6 +27,10 @@ pub fn artist(self: @This()) ?[]const u8 {
     return self.trackartist orelse self.albumartist orelse self.composer orelse self.performer;
 }
 
+pub fn album_artist_fallback(self: @This()) ?[]const u8 {
+    return self.albumartist orelse self.trackartist orelse self.composer orelse self.performer;
+}
+
 pub fn filename(self: @This()) []const u8 {
     const start = if (std.mem.lastIndexOfScalar(u8, self.filepath, DIR_SEPARATOR)) |s| s + 1 else 0;
     const end = (std.mem.lastIndexOfScalar(u8, self.filepath[start..], '.') orelse self.filepath.len) + start;
