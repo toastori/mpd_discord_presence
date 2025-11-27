@@ -19,15 +19,27 @@ large_image: ?[]const u8,
 
 pub fn format(self: Activity, w: *Writer) Writer.Error!void {
     try w.print(
-        \\{{"details":"{s}{s}","state":"{s}","timestamps":{{"start":{d},"end":{d}}},"type":{d},"status_display_type":{d}{s}{s}{s}}}
+        \\{{"details":"{f}{s}","state":"{f}","timestamps":{{"start":{d},"end":{d}}},"type":{d},"status_display_type":{d}{s}{s}{s}}}
     , .{
-        self.details,                           if (self.details.len < 2) "  " else "",
-        self.state,                             self.timestamps.start,
+        EscapeParser{ .str = self.details },    if (self.details.len < 2) "  " else "",
+        EscapeParser{ .str = self.state },      self.timestamps.start,
         self.timestamps.end,                    @intFromEnum(self.activity_type),
         @intFromEnum(self.status_display_type), if (self.large_image != null) ",\"assets\":{\"large_image\":\"" else "",
         self.large_image orelse "",             if (self.large_image != null) "\"}" else "",
     });
 }
+
+const EscapeParser = struct {
+    str: []const u8,
+
+    pub fn format(self: EscapeParser, w: *Writer) Writer.Error!void {
+        for (self.str) |c| {
+            if (c == '"' or c == '\\')
+                try w.writeByte('\\');
+            try w.writeByte(c);
+        }
+    }
+};
 
 /// Activity type
 pub const Type = enum(u8) {
