@@ -54,7 +54,7 @@ fn juicy_main(ally: Allocator, io: Io) JuicyError!void {
     var signal_queue: Io.Queue(bool) = .init(&.{});
     var msg_queue: Io.Queue(discord.MsgQueueItem) = .init(&.{});
 
-    stop(io, &signal_queue);
+    if (builtin.mode == .Debug) stop(io, &signal_queue);
 
     var client: discord.Client = .new(config.get().client_id);
 
