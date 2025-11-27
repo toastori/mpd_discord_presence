@@ -46,7 +46,6 @@ pub fn search(ally: Allocator, io: Io, signal_queue: *Io.Queue(bool)) void {
         .method = .GET,
         .response_writer = &writer.interface,
         .location = .{ .uri = std.Uri.parse(uri_raw) catch return },
-        .keep_alive = false,
     }) catch return;
     if (id_fetch.status.class() != .success) return;
 
