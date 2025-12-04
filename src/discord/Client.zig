@@ -93,7 +93,9 @@ pub fn reader(client: *Client, io: Io) Reader.Error!void {
     while (true) {
         _ = try r.takeInt(u32, .little); // opcode
         const msg_len = try r.takeInt(u32, .little);
-        try r.discardAll(msg_len);
+        const msg = try r.take(msg_len);
+        if (std.mem.eql(u8, msg[8..][0..5], "ERROR"))
+            std.log.err("discord: {s}", .{msg});
     }
 }
 
