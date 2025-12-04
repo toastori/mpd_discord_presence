@@ -34,7 +34,7 @@ pub fn search(ally: Allocator, io: Io, signal_queue: *Io.Queue(bool)) void {
 
         break :blk bufPrint(
             &uri_buf,
-            mbz_rg ++ "query=\"{f}\"+ARTIST%3A\"{f}\"&limit=1&fmt=json",
+            mbz_rg ++ "query=\"{f}\"+artist%3A\"{f}\"&limit=1&fmt=json",
             .{
                 PercentEncoder{ .str = global.songinfo.album },
                 PercentEncoder{ .str = global.songinfo.album_artist_fallback() },
