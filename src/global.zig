@@ -21,6 +21,18 @@ pub fn deinit(ally: Allocator, io: Io) void {
     str_buf.deinit(ally);
 }
 
+/// Reset global states to init (likely)
+pub fn reset(io: Io) void {
+    playinfo_lock(io) catch return;
+    defer playinfo_unlock(io);
+    songinfo_lock(io) catch return;
+    defer songinfo_unlock(io);
+
+    playinfo = .{};
+    songinfo = .{ .filepath = undefined };
+    str_buf.clearRetainingCapacity();
+}
+
 pub fn playinfo_lock(io: Io) !void {
     try playinfo_mutex.lock(io);
 }

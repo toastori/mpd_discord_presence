@@ -45,6 +45,7 @@ pub fn main(ally: Allocator, io: Io, queue: *Io.Queue(bool)) MainError!void {
                 InnerError.UnexpectedResponse => return InnerError.UnexpectedResponse,
                 InnerError.ReadFailed, InnerError.WriteFailed => {
                     std.log.info("mpd disconnected", .{});
+                    global.reset(io); // so next connection can do everything correctly
                     continue;
                 },
         };
